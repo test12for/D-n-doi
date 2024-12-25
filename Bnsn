@@ -1,0 +1,135 @@
+#include <iostream>
+#include <chrono>
+#include <thread>
+#include <vector>
+#import <UIKit/UIKit.h>  // Thêm để lấy thông tin về DPI từ iOS
+
+// Giới hạn FPS ở mức 60
+const float TARGET_FPS = 60.0f;
+const std::chrono::milliseconds FRAME_DURATION(1000 / TARGET_FPS);
+
+// Cấu trúc đại diện cho đối tượng game (GameObject)
+class GameObject {
+public:
+    GameObject(int id) : id(id), health(100), positionX(0), positionY(0) {
+        std::cout << "GameObject " << id << " created!" << std::endl;
+    }
+
+    // Reset lại trạng thái đối tượng (tái sử dụng đối tượng)
+    void reset() {
+        health = 100;
+        positionX = 0;
+        positionY = 0;
+        std::cout << "GameObject " << id << " reset!" << std::endl;
+    }
+
+    void update() {
+        // Cập nhật trạng thái đối tượng, ví dụ di chuyển
+        positionX += 1;
+        positionY += 1;
+        std::cout << "GameObject " << id << " updated to position (" << positionX << ", " << positionY << ")" << std::endl;
+    }
+
+    void render(float scaleFactor) {
+        // Render đối tượng (hoặc gọi đến API đồ họa như Metal/OpenGL)
+        // Điều chỉnh vị trí và kích thước đối tượng theo tỷ lệ DPI (scale factor)
+        float adjustedX = positionX * scaleFactor;
+        float adjustedY = positionY * scaleFactor;
+        std::cout << "Rendering GameObject " << id << " at scaled position (" << adjustedX << ", " << adjustedY << ") with scale factor " << scaleFactor << std::endl;
+    }
+
+private:
+    int id;         // ID của đối tượng
+    int health;     // Máu của đối tượng
+    int positionX;  // Vị trí theo trục X
+    int positionY;  // Vị trí theo trục Y
+};
+
+// Lớp MetalWrapper để lấy thông tin DPI từ màn hình
+class MetalWrapper {
+public:
+    float getScaleFactor() {
+        // Sử dụng UIScreen để lấy tỷ lệ DPI của màn hình
+        UIScreen* screen = [UIScreen mainScreen];
+        return screen.scale; // Trả về tỷ lệ scale của màn hình (ví dụ: 2.0 hoặc 3.0)
+    }
+};
+
+// Lớp Game quản lý tất cả các đối tượng
+class Game {
+public:
+    Game() {
+        // Khởi tạo một số đối tượng trong game
+        for (int i = 0; i < 5; ++i) {
+            gameObjects.push_back(GameObject(i));
+        }
+    }
+
+    // Cập nhật và render game
+    void update() {
+        for (auto& obj : gameObjects) {
+            obj.update();  // Cập nhật trạng thái của từng đối tượng
+        }
+    }
+
+    void render(float scaleFactor) {
+        for (auto& obj : gameObjects) {
+            obj.render(scaleFactor);  // Render từng đối tượng với scale factor
+        }
+    }
+
+    // Quản lý game loop và đảm bảo FPS ổn định
+    void gameLoop() {
+        auto lastTime = std::chrono::high_resolution_clock::now();
+
+        // Khởi tạo đối tượng MetalWrapper để lấy scale factor
+        MetalWrapper metalWrapper;
+
+        while (true) {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            std::chrono::milliseconds delta = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastTime);
+
+            // Chỉ chạy game loop nếu đủ thời gian (để giữ FPS ổn định)
+            if (delta < FRAME_DURATION) {
+                std::this_thread::sleep_for(FRAME_DURATION - delta);  // Sleep để duy trì FPS ổn định
+            }
+
+            lastTime = currentTime;
+
+            update();  // Cập nhật trạng thái game
+
+            // Lấy scale factor (DPI) từ MetalWrapper
+            float scaleFactor = metalWrapper.getScaleFactor();
+
+            render(scaleFactor);  // Render lại game với scale factor
+
+            // Tái sử dụng đối tượng sau mỗi vài chu kỳ
+            if (currentFrameCount % 60 == 0) {  // Reset mỗi 60 frame
+                resetObjects();
+            }
+
+            ++currentFrameCount;
+        }
+    }
+
+private:
+    std::vector<GameObject> gameObjects;  // Danh sách các đối tượng trong game
+    int currentFrameCount = 0;
+
+    // Reset lại các đối tượng sau một số frame nhất định
+    void resetObjects() {
+        for (auto& obj : gameObjects) {
+            obj.reset();  // Tái sử dụng các đối tượng thay vì tạo mới
+        }
+    }
+};
+
+// Main game entry point
+int main() {
+    std::cout << "Starting game..." << std::endl;
+
+    Game game;   // Khởi tạo game
+    game.gameLoop();  // Bắt đầu vòng lặp game
+
+    return 0;
+}
